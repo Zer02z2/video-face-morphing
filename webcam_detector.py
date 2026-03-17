@@ -5,17 +5,20 @@ Module: captures webcam frames and returns facial landmarks via MediaPipe.
 
 Yields (frame, landmarks, detected) per frame:
     frame      — BGR numpy array (H, W, 3)
-    landmarks  — (468, 2) int16 array of pixel (x, y) coords, or None
+    landmarks  — (478, 2) int16 array of pixel (x, y) coords, or None
     detected   — bool
 
 Standalone test (draws landmarks on live feed):
     python webcam_detector.py
 """
 
+import time
 import cv2
 import numpy as np
 import mediapipe as mp
-from typing import Generator, Tuple, Optional
+from typing import Generator
+
+from face_model import create_image_landmarker, landmarks_to_numpy
 
 
 class WebcamDetector:
@@ -25,7 +28,7 @@ class WebcamDetector:
         self.height = height
         self.fps = fps
         self._cap = None
-        self._face_mesh = None
+        self._landmarker = None
 
     def __enter__(self):
         self._cap = cv2.VideoCapture(self.device)
@@ -36,40 +39,30 @@ class WebcamDetector:
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self._cap.set(cv2.CAP_PROP_FPS, self.fps)
 
-        mp_face_mesh = mp.solutions.face_mesh
-        self._face_mesh = mp_face_mesh.FaceMesh(
-            static_image_mode=False,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        ).__enter__()
-
+        self._landmarker = create_image_landmarker().__enter__()
         return self
 
     def __exit__(self, *args):
         if self._cap:
             self._cap.release()
-        if self._face_mesh:
-            self._face_mesh.__exit__(*args)
+        if self._landmarker:
+            self._landmarker.__exit__(*args)
 
-    def frames(self) -> Generator[Tuple[np.ndarray, Optional[np.ndarray], bool], None, None]:
+    def frames(self) -> Generator[tuple[np.ndarray, np.ndarray | None, bool], None, None]:
         """Yield (frame, landmarks, detected) until webcam closes or generator is stopped."""
         while self._cap.isOpened():
             ret, frame = self._cap.read()
             if not ret:
                 break
 
+            frame = cv2.flip(frame, 1)
             h, w = frame.shape[:2]
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self._face_mesh.process(rgb)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            result = self._landmarker.detect(mp_image)
 
-            if results.multi_face_landmarks:
-                lm = results.multi_face_landmarks[0].landmark
-                landmarks = np.array(
-                    [(int(p.x * w), int(p.y * h)) for p in lm],
-                    dtype=np.int16,
-                )
+            if result.face_landmarks:
+                landmarks = landmarks_to_numpy(result.face_landmarks[0], w, h)
                 yield frame, landmarks, True
             else:
                 yield frame, None, False
@@ -91,7 +84,7 @@ if __name__ == "__main__":
         for frame, landmarks, detected in detector.frames():
             if detected:
                 vis = _draw_landmarks(frame, landmarks)
-                label = f"landmarks: 468"
+                label = f"landmarks: {len(landmarks)}"
             else:
                 vis = frame.copy()
                 label = "no face detected"
