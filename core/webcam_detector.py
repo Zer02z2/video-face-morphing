@@ -18,7 +18,7 @@ import numpy as np
 import mediapipe as mp
 from typing import Generator
 
-from face_model import create_image_landmarker, landmarks_to_numpy
+from core.face_model import create_image_landmarker, landmarks_to_numpy
 
 
 class WebcamDetector:

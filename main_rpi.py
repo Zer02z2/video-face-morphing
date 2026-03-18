@@ -36,10 +36,10 @@ import threading
 import cv2
 import numpy as np
 
-from webcam_detector import WebcamDetector
-from warp_engine import get_triangle_indices, warp_face
-from compositor import composite
-from face_model import get_landmark_indices
+from core.webcam_detector import WebcamDetector
+from core.warp_engine import get_triangle_indices, warp_face
+from core.compositor import composite
+from core.face_model import get_landmark_indices
 
 
 # ---------------------------------------------------------------------------

@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
-from face_model import create_video_landmarker, landmarks_to_numpy, LANDMARK_COUNT, get_landmark_indices
+from core.face_model import create_video_landmarker, landmarks_to_numpy, LANDMARK_COUNT, get_landmark_indices
 
 
 def prebake(video_path: str, landmark_mode: str = "NORMAL") -> str:

@@ -32,9 +32,9 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
-from warp_engine import get_triangle_indices, warp_face
-from compositor import composite
-from face_model import create_image_landmarker, landmarks_to_numpy, get_landmark_indices
+from core.warp_engine import get_triangle_indices, warp_face
+from core.compositor import composite
+from core.face_model import create_image_landmarker, landmarks_to_numpy, get_landmark_indices
 
 
 # ---------------------------------------------------------------------------
