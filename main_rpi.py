@@ -2,8 +2,8 @@
 main_rpi.py
 
 Pi-optimised pipeline. Splits MediaPipe detection and warp/composite into two
-threads pinned to separate CPU cores, and adds --skip-warp to reuse the last
-warp result for N frames (only re-compositing with the current video frame).
+threads, and adds --skip-warp to reuse the last warp result for N frames
+(only re-compositing with the current video frame).
 
 Usage:
     python main_rpi.py <video_path> [options]
@@ -22,12 +22,10 @@ Display scripts connect to this port:
     python matrix_display.py
 
 The video's .npz file must already exist (run prebaker.py first).
-isolcpus=3 is assumed in /boot/firmware/cmdline.txt (core 3 → RGB matrix).
-Detection thread → core 1, render thread → core 2, OS/misc → core 0.
+The OS scheduler is left to distribute threads freely across all available cores.
 """
 
 import sys
-import os
 import time
 import socket
 import struct
@@ -108,12 +106,6 @@ def _tcp_server(port: int) -> None:
 def _detection_loop(detector: WebcamDetector, skip: int) -> None:
     global _latest_detection
 
-    try:
-        os.sched_setaffinity(0, {1})
-        print("Detection thread pinned to core 1")
-    except (AttributeError, OSError):
-        pass  # macOS or no permission — ignore
-
     skip_counter = 0
     last_landmarks = None
 
@@ -173,12 +165,6 @@ def _pipeline(
     feather_radius: int,
     color_correct: bool,
 ) -> None:
-    try:
-        os.sched_setaffinity(0, {2})
-        print("Render thread pinned to core 2")
-    except (AttributeError, OSError):
-        pass
-
     print("Loading pre-baked landmarks...")
     data = np.load(npz_path, allow_pickle=True)
     landmark_indices = get_landmark_indices(landmark_mode)
