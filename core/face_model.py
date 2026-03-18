@@ -37,10 +37,45 @@ REDUCED_LANDMARK_INDICES = [
 ]
 
 
+# 20-point coarse set — ~30 triangles, ~4x faster than REDUCED
+# Covers key structural points: face outline, brow centers, eye corners,
+# nose tip, mouth corners. Warp will look blocky up close but fine on a matrix.
+COARSE_LANDMARK_INDICES = [
+    # Face outline (6)
+    10,   # forehead center
+    162,  # left temple
+    389,  # right temple
+    234,  # left cheek
+    454,  # right cheek
+    152,  # chin
+    # Eyebrows (4)
+    107,  # right inner brow
+    66,   # right outer brow
+    336,  # left inner brow
+    296,  # left outer brow
+    # Eye corners (4)
+    33,   # right eye inner
+    133,  # right eye outer
+    362,  # left eye inner
+    263,  # left eye outer
+    # Nose (2)
+    1,    # nose bridge
+    4,    # nose tip
+    # Mouth (4)
+    61,   # right mouth corner
+    291,  # left mouth corner
+    0,    # upper lip center
+    17,   # lower lip center
+]
+
+
 def get_landmark_indices(mode: str) -> list | None:
     """Return landmark index list for the given mode, or None for full 478."""
-    if mode.upper() == "REDUCED":
+    m = mode.upper()
+    if m == "REDUCED":
         return REDUCED_LANDMARK_INDICES
+    if m == "COARSE":
+        return COARSE_LANDMARK_INDICES
     return None
 
 _MODEL_URL = (

@@ -334,7 +334,7 @@ if __name__ == "__main__":
                         help="Port on Pi serving webcam frames (default: 9001)")
     parser.add_argument("--output-port",  type=int, default=9002, dest="output_port",
                         help="Port on Pi receiving processed frames (default: 9002)")
-    parser.add_argument("--landmark",     choices=["NORMAL", "REDUCED"], default="NORMAL")
+    parser.add_argument("--landmark",     choices=["NORMAL", "REDUCED", "COARSE"], default="NORMAL")
     args = parser.parse_args()
 
     if not os.path.exists(args.video_path):

@@ -314,7 +314,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-warp", type=int, default=1, dest="skip_warp",
                         help="Redo triangle warp every N frames (default: 1)")
     parser.add_argument("--port",      type=int, default=9002)
-    parser.add_argument("--landmark",  choices=["NORMAL", "REDUCED"], default="NORMAL")
+    parser.add_argument("--landmark",  choices=["NORMAL", "REDUCED", "COARSE"], default="NORMAL")
     args = parser.parse_args()
 
     if not os.path.exists(args.video_path):

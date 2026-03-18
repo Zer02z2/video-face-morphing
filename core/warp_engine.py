@@ -20,6 +20,31 @@ Standalone test (draws Delaunay triangulation on live webcam feed):
 import cv2
 import numpy as np
 
+# Numba JIT — compiles the pixel mapping loop to native ARM/x86 code.
+# parallel=True splits rows across CPU cores via OpenMP.
+# cache=True saves the compiled binary so the first-run penalty only happens once.
+# Falls back to plain NumPy if numba isn't installed.
+try:
+    import numba
+
+    @numba.njit(parallel=True, cache=True)
+    def _build_remap(label_map: np.ndarray, affines: np.ndarray,
+                     map_x: np.ndarray, map_y: np.ndarray) -> None:
+        h, w = label_map.shape
+        for y in numba.prange(h):
+            for x in range(w):
+                tri = label_map[y, x]
+                if tri < 0:
+                    continue
+                map_x[y, x] = affines[tri, 0, 0] * x + affines[tri, 0, 1] * y + affines[tri, 0, 2]
+                map_y[y, x] = affines[tri, 1, 0] * x + affines[tri, 1, 1] * y + affines[tri, 1, 2]
+
+    _NUMBA = True
+    print("[warp_engine] Numba JIT enabled")
+
+except ImportError:
+    _NUMBA = False
+
 
 # ---------------------------------------------------------------------------
 # Delaunay triangulation
@@ -124,34 +149,36 @@ def warp_face(
     affines = M_T.transpose(0, 2, 1)                  # (n_tri, 2, 3)
 
     # ------------------------------------------------------------------
-    # 3. Vectorised pixel → source coordinate mapping
+    # 3. Pixel → source coordinate mapping
     #
     #    For every pixel inside a triangle:
     #        src_x = a*dst_x + b*dst_y + c
     #        src_y = d*dst_x + e*dst_y + f
-    #    where (a,b,c,d,e,f) come from that pixel's triangle affine.
+    #
+    #    Numba path: parallel native loop across rows (uses all CPU cores).
+    #    NumPy path: vectorised gather + element-wise ops (fallback).
     # ------------------------------------------------------------------
-    valid  = label_map >= 0
-    ys, xs = np.where(valid)
-    labels = label_map[ys, xs]          # (N_pixels,) — triangle index per pixel
-
-    xs_f = xs.astype(np.float32)
-    ys_f = ys.astype(np.float32)
-
-    # Gather the 6 affine coefficients for each pixel's triangle
-    a = affines[labels, 0, 0];  b = affines[labels, 0, 1];  c = affines[labels, 0, 2]
-    d = affines[labels, 1, 0];  e = affines[labels, 1, 1];  f = affines[labels, 1, 2]
-
     map_x = np.zeros((h, w), dtype=np.float32)
     map_y = np.zeros((h, w), dtype=np.float32)
-    map_x[ys, xs] = a * xs_f + b * ys_f + c
-    map_y[ys, xs] = d * xs_f + e * ys_f + f
+
+    if _NUMBA:
+        _build_remap(label_map, affines, map_x, map_y)
+    else:
+        valid  = label_map >= 0
+        ys, xs = np.where(valid)
+        labels = label_map[ys, xs]
+        xs_f   = xs.astype(np.float32)
+        ys_f   = ys.astype(np.float32)
+        a = affines[labels, 0, 0];  b = affines[labels, 0, 1];  c = affines[labels, 0, 2]
+        d = affines[labels, 1, 0];  e = affines[labels, 1, 1];  f = affines[labels, 1, 2]
+        map_x[ys, xs] = a * xs_f + b * ys_f + c
+        map_y[ys, xs] = d * xs_f + e * ys_f + f
 
     # Single remap — one C++ call replaces N warpAffine calls
     warped = cv2.remap(src_frame, map_x, map_y,
                        interpolation=cv2.INTER_LINEAR,
                        borderMode=cv2.BORDER_REFLECT_101)
-    warped[~valid] = 0
+    warped[label_map < 0] = 0
 
     # Convex hull mask
     hull = cv2.convexHull(dst_lm)

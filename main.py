@@ -276,7 +276,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip",   type=int, default=1,
                         help="Run MediaPipe every N frames (default: 1 = every frame)")
     parser.add_argument("--port",   type=int, default=9002)
-    parser.add_argument("--landmark", choices=["NORMAL", "REDUCED"], default="NORMAL",
+    parser.add_argument("--landmark", choices=["NORMAL", "REDUCED", "COARSE"], default="NORMAL",
                         help="NORMAL: all 478 landmarks  REDUCED: 68-point subset (~7x faster warp)")
     args = parser.parse_args()
 

@@ -127,7 +127,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("video_path")
-    parser.add_argument("--landmark", choices=["NORMAL", "REDUCED"], default="NORMAL",
+    parser.add_argument("--landmark", choices=["NORMAL", "REDUCED", "COARSE"], default="NORMAL",
                         help="NORMAL: all 478 landmarks  REDUCED: 68-point subset (~7x faster warp)")
     args = parser.parse_args()
     prebake(args.video_path, args.landmark)
