@@ -149,7 +149,7 @@ def parse_args():
     parser.add_argument("--led-brightness",          type=int,  default=100, dest="led_brightness")
     parser.add_argument("--led-hardware-mapping",    default="regular",      dest="led_hardware_mapping")
     parser.add_argument("--led-pixel-mapper",        default="",             dest="led_pixel_mapper")
-    parser.add_argument("--led-show-refresh",        action="store_true",    default=True, dest="led_show_refresh")
+    parser.add_argument("--led-show-refresh",        action="store_true", default=False, dest="led_show_refresh")
 
     return parser.parse_args()
 
