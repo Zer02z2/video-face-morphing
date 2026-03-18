@@ -38,7 +38,7 @@ import numpy as np
 
 from core.webcam_detector import WebcamDetector
 from core.warp_engine import get_triangle_indices, warp_face
-from core.compositor import composite
+from core.compositor import _feather_mask, _match_color
 from core.face_model import get_landmark_indices
 
 
@@ -170,6 +170,7 @@ def _pipeline(
     skip: int,
     skip_warp: int,
     landmark_mode: str,
+    feather_radius: int,
 ) -> None:
     try:
         os.sched_setaffinity(0, {2})
@@ -233,8 +234,10 @@ def _pipeline(
             target=_detection_loop, args=(detector, skip), daemon=True
         ).start()
 
-        last_warped:  np.ndarray | None = None
-        last_mask:    np.ndarray | None = None
+        last_warped:     np.ndarray | None = None
+        last_mask:       np.ndarray | None = None
+        last_corrected:  np.ndarray | None = None  # color-corrected warped face
+        last_alpha:      np.ndarray | None = None  # feathered mask (H,W,1) float32
         warp_counter: int = 0
         frame_idx:    int = 0
 
@@ -259,7 +262,9 @@ def _pipeline(
                 webcam_frame, webcam_landmarks, webcam_detected = detection
 
                 if webcam_detected and webcam_landmarks is not None:
-                    # Redo warp every skip_warp frames, reuse otherwise
+                    # Redo warp every skip_warp frames, reuse otherwise.
+                    # Also redo feathering and color correction — these are the
+                    # expensive compositor ops, so cache them with the warp.
                     if warp_counter == 0 or last_warped is None:
                         if warp_mode == 0:
                             last_warped, last_mask = warp_face(
@@ -272,15 +277,23 @@ def _pipeline(
                                 webcam_frame, webcam_landmarks,
                                 video_landmarks[frame_idx], video_neutral, (proc_h, proc_w),
                             )
+                        # Feathering: only recomputed when warp is redone
+                        last_alpha     = _feather_mask(last_mask, feather_radius)[:, :, np.newaxis]
+                        # Color correction: only recomputed when warp is redone
+                        last_corrected = _match_color(last_warped, video_frame, last_mask).astype(np.float32)
                     warp_counter = (warp_counter + 1) % skip_warp
 
-                    composited = composite(video_frame, last_warped, last_mask)
+                    # Fast per-frame blend — just float multiply-add, no blur/stats
+                    blended = video_frame.astype(np.float32) * (1.0 - last_alpha) + last_corrected * last_alpha
+                    composited = np.clip(blended, 0, 255).astype(np.uint8)
                     result = cv2.addWeighted(video_frame, 1.0 - w, composited, w, 0) if w < 1.0 else composited
                 else:
-                    # Face lost — reset warp cache
-                    last_warped  = None
-                    last_mask    = None
-                    warp_counter = 0
+                    # Face lost — reset all caches
+                    last_warped    = None
+                    last_mask      = None
+                    last_corrected = None
+                    last_alpha     = None
+                    warp_counter   = 0
                     result = video_frame
             else:
                 result = video_frame
@@ -311,8 +324,10 @@ if __name__ == "__main__":
     parser.add_argument("--height",    type=int, default=None)
     parser.add_argument("--skip",      type=int, default=1,
                         help="Run MediaPipe every N frames (default: 1)")
-    parser.add_argument("--skip-warp", type=int, default=1, dest="skip_warp",
+    parser.add_argument("--skip-warp",      type=int, default=1, dest="skip_warp",
                         help="Redo triangle warp every N frames (default: 1)")
+    parser.add_argument("--feather-radius", type=int, default=8, dest="feather_radius",
+                        help="Feather edge softness in pixels (default: 8, suits 192x192)")
     parser.add_argument("--port",      type=int, default=9002)
     parser.add_argument("--landmark",  choices=["NORMAL", "REDUCED", "COARSE"], default="NORMAL")
     args = parser.parse_args()
@@ -332,5 +347,5 @@ if __name__ == "__main__":
     _pipeline(
         args.video_path, npz_path,
         args.warp, args.width, args.height,
-        args.skip, args.skip_warp, args.landmark,
+        args.skip, args.skip_warp, args.landmark, args.feather_radius,
     )

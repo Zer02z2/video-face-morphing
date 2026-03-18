@@ -33,7 +33,7 @@ import numpy as np
 import mediapipe as mp
 
 from core.warp_engine import get_triangle_indices, warp_face
-from core.compositor import composite
+from core.compositor import _feather_mask, _match_color
 from core.face_model import create_image_landmarker, landmarks_to_numpy, get_landmark_indices
 
 
@@ -201,6 +201,7 @@ def _pipeline(
     proc_w: int | None,
     proc_h: int | None,
     skip_warp: int,
+    feather_radius: int,
     landmark_mode: str,
 ) -> None:
     print("Loading pre-baked landmarks...")
@@ -250,8 +251,10 @@ def _pipeline(
         print(f"ERROR: could not open video: {video_path}")
         return
 
-    last_warped:  np.ndarray | None = None
-    last_mask:    np.ndarray | None = None
+    last_warped:    np.ndarray | None = None
+    last_mask:      np.ndarray | None = None
+    last_corrected: np.ndarray | None = None
+    last_alpha:     np.ndarray | None = None
     warp_counter: int = 0
     frame_idx:    int = 0
 
@@ -288,14 +291,19 @@ def _pipeline(
                             webcam_frame, webcam_landmarks,
                             video_landmarks[frame_idx], video_neutral, (proc_h, proc_w),
                         )
+                    last_alpha     = _feather_mask(last_mask, feather_radius)[:, :, np.newaxis]
+                    last_corrected = _match_color(last_warped, video_frame, last_mask).astype(np.float32)
                 warp_counter = (warp_counter + 1) % skip_warp
 
-                composited = composite(video_frame, last_warped, last_mask)
+                blended    = video_frame.astype(np.float32) * (1.0 - last_alpha) + last_corrected * last_alpha
+                composited = np.clip(blended, 0, 255).astype(np.uint8)
                 result = cv2.addWeighted(video_frame, 1.0 - w, composited, w, 0) if w < 1.0 else composited
             else:
-                last_warped  = None
-                last_mask    = None
-                warp_counter = 0
+                last_warped    = None
+                last_mask      = None
+                last_corrected = None
+                last_alpha     = None
+                warp_counter   = 0
                 result = video_frame
         else:
             result = video_frame
@@ -328,8 +336,10 @@ if __name__ == "__main__":
                         help="IP of the Raspberry Pi running pi_stream.py")
     parser.add_argument("--skip",         type=int, default=1,
                         help="Run MediaPipe every N incoming frames (default: 1)")
-    parser.add_argument("--skip-warp",    type=int, default=1, dest="skip_warp",
+    parser.add_argument("--skip-warp",      type=int, default=1, dest="skip_warp",
                         help="Redo triangle warp every N frames (default: 1)")
+    parser.add_argument("--feather-radius", type=int, default=8, dest="feather_radius",
+                        help="Feather edge softness in pixels (default: 8)")
     parser.add_argument("--webcam-port",  type=int, default=9001, dest="webcam_port",
                         help="Port on Pi serving webcam frames (default: 9001)")
     parser.add_argument("--output-port",  type=int, default=9002, dest="output_port",
@@ -361,4 +371,4 @@ if __name__ == "__main__":
         daemon=True,
     ).start()
 
-    _pipeline(args.video_path, npz_path, args.warp, args.width, args.height, args.skip_warp, args.landmark)
+    _pipeline(args.video_path, npz_path, args.warp, args.width, args.height, args.skip_warp, args.landmark, args.feather_radius)
