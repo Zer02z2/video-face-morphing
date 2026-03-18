@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+
+# MediaPipe model
+*.task
+
+# Pre-baked data & videos
+*.npz
+*.mp4
+*.mov
+*.avi
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
