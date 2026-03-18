@@ -16,10 +16,10 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
-from face_model import create_video_landmarker, landmarks_to_numpy, LANDMARK_COUNT
+from face_model import create_video_landmarker, landmarks_to_numpy, LANDMARK_COUNT, get_landmark_indices
 
 
-def prebake(video_path: str) -> str:
+def prebake(video_path: str, landmark_mode: str = "NORMAL") -> str:
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Video not found: {video_path}")
 
@@ -32,9 +32,11 @@ def prebake(video_path: str) -> str:
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    print(f"Video: {width}x{height} @ {fps:.2f}fps, {total_frames} frames")
+    landmark_indices = get_landmark_indices(landmark_mode)
+    lm_count = len(landmark_indices) if landmark_indices is not None else LANDMARK_COUNT
+    print(f"Video: {width}x{height} @ {fps:.2f}fps, {total_frames} frames  |  landmark mode: {landmark_mode} ({lm_count} pts)")
 
-    landmarks_out = np.zeros((total_frames, LANDMARK_COUNT, 2), dtype=np.int16)
+    landmarks_out = np.zeros((total_frames, lm_count, 2), dtype=np.int16)
     detected_out = np.zeros(total_frames, dtype=bool)
 
     with create_video_landmarker() as landmarker:
@@ -50,7 +52,7 @@ def prebake(video_path: str) -> str:
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
             if result.face_landmarks:
-                pts = landmarks_to_numpy(result.face_landmarks[0], width, height)
+                pts = landmarks_to_numpy(result.face_landmarks[0], width, height, landmark_indices)
                 x_span = pts[:, 0].max() - pts[:, 0].min()
                 y_span = pts[:, 1].max() - pts[:, 1].min()
                 if y_span > 0 and (x_span / y_span) >= 0.7:
@@ -108,7 +110,7 @@ def prebake(video_path: str) -> str:
     detected_indices = np.where(detected_out)[0][:30]
     neutral = landmarks_out[detected_indices].mean(axis=0).astype(np.float32)
 
-    output_path = os.path.splitext(video_path)[0] + ".npz"
+    output_path = os.path.splitext(video_path)[0] + f"_{landmark_mode.lower()}.npz"
     np.savez_compressed(
         output_path,
         landmarks=landmarks_out,
@@ -122,7 +124,10 @@ def prebake(video_path: str) -> str:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python prebaker.py <video_path>")
-        sys.exit(1)
-    prebake(sys.argv[1])
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("video_path")
+    parser.add_argument("--landmark", choices=["NORMAL", "REDUCED"], default="NORMAL",
+                        help="NORMAL: all 478 landmarks  REDUCED: 68-point subset (~7x faster warp)")
+    args = parser.parse_args()
+    prebake(args.video_path, args.landmark)

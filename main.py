@@ -34,6 +34,7 @@ import numpy as np
 from webcam_detector import WebcamDetector
 from warp_engine import get_triangle_indices, warp_face
 from compositor import composite
+from face_model import get_landmark_indices
 
 
 # ---------------------------------------------------------------------------
@@ -128,9 +129,12 @@ def _pipeline(
     proc_w: int | None,
     proc_h: int | None,
     skip: int,
+    landmark_mode: str,
 ) -> None:
     print("Loading pre-baked landmarks...")
     data = np.load(npz_path, allow_pickle=True)
+    landmark_indices = get_landmark_indices(landmark_mode)
+
     video_landmarks = data["landmarks"].astype(np.float32)
     detected        = data["detected"]
     fade_weights    = data["fade_weights"]
@@ -185,7 +189,7 @@ def _pipeline(
     last_webcam_frame:     np.ndarray | None = None
     skip_counter = 0
 
-    with WebcamDetector(width=proc_w, height=proc_h) as detector:
+    with WebcamDetector(width=proc_w, height=proc_h, landmark_indices=landmark_indices) as detector:
         webcam_gen = detector.frames()
         frame_idx  = 0
 
@@ -272,20 +276,22 @@ if __name__ == "__main__":
     parser.add_argument("--skip",   type=int, default=1,
                         help="Run MediaPipe every N frames (default: 1 = every frame)")
     parser.add_argument("--port",   type=int, default=9002)
+    parser.add_argument("--landmark", choices=["NORMAL", "REDUCED"], default="NORMAL",
+                        help="NORMAL: all 478 landmarks  REDUCED: 68-point subset (~7x faster warp)")
     args = parser.parse_args()
 
     if not os.path.exists(args.video_path):
         print(f"ERROR: video not found: {args.video_path}")
         sys.exit(1)
 
-    npz_path = os.path.splitext(args.video_path)[0] + ".npz"
+    npz_path = os.path.splitext(args.video_path)[0] + f"_{args.landmark.lower()}.npz"
     if not os.path.exists(npz_path):
         print(f"ERROR: pre-baked data not found: {npz_path}")
-        print(f"       Run: python prebaker.py {args.video_path}")
+        print(f"       Run: python prebaker.py {args.video_path} --landmark {args.landmark}")
         sys.exit(1)
 
     threading.Thread(
         target=_tcp_server, args=(args.port,), daemon=True
     ).start()
 
-    _pipeline(args.video_path, npz_path, args.warp, args.width, args.height, args.skip)
+    _pipeline(args.video_path, npz_path, args.warp, args.width, args.height, args.skip, args.landmark)

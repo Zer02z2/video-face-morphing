@@ -22,11 +22,13 @@ from face_model import create_image_landmarker, landmarks_to_numpy
 
 
 class WebcamDetector:
-    def __init__(self, device: int = 0, width: int = 640, height: int = 480, fps: int = 30):
+    def __init__(self, device: int = 0, width: int = 640, height: int = 480, fps: int = 30,
+                 landmark_indices: list | None = None):
         self.device = device
         self.width = width
         self.height = height
         self.fps = fps
+        self.landmark_indices = landmark_indices
         self._cap = None
         self._landmarker = None
 
@@ -62,7 +64,7 @@ class WebcamDetector:
             result = self._landmarker.detect(mp_image)
 
             if result.face_landmarks:
-                landmarks = landmarks_to_numpy(result.face_landmarks[0], w, h)
+                landmarks = landmarks_to_numpy(result.face_landmarks[0], w, h, self.landmark_indices)
                 yield frame, landmarks, True
             else:
                 yield frame, None, False
