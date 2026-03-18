@@ -203,6 +203,7 @@ def _pipeline(
     skip_warp: int,
     feather_radius: int,
     landmark_mode: str,
+    color_correct: bool,
 ) -> None:
     print("Loading pre-baked landmarks...")
     data            = np.load(npz_path, allow_pickle=True)
@@ -253,8 +254,9 @@ def _pipeline(
 
     last_warped:    np.ndarray | None = None
     last_mask:      np.ndarray | None = None
-    last_corrected: np.ndarray | None = None
-    last_alpha:     np.ndarray | None = None
+    last_premult:   np.ndarray | None = None
+    last_inv_alpha: np.ndarray | None = None
+    blend_buf:      np.ndarray | None = None
     warp_counter: int = 0
     frame_idx:    int = 0
 
@@ -291,18 +293,25 @@ def _pipeline(
                             webcam_frame, webcam_landmarks,
                             video_landmarks[frame_idx], video_neutral, (proc_h, proc_w),
                         )
-                    last_alpha     = _feather_mask(last_mask, feather_radius)[:, :, np.newaxis]
-                    last_corrected = _match_color(last_warped, video_frame, last_mask).astype(np.float32)
+                    alpha          = _feather_mask(last_mask, feather_radius)[:, :, np.newaxis]
+                    face_f32       = (_match_color(last_warped, video_frame, last_mask).astype(np.float32)
+                                      if color_correct else last_warped.astype(np.float32))
+                    last_premult   = face_f32 * alpha
+                    last_inv_alpha = 1.0 - alpha
+                    if blend_buf is None or blend_buf.shape != video_frame.shape:
+                        blend_buf = np.empty(video_frame.shape, dtype=np.float32)
                 warp_counter = (warp_counter + 1) % skip_warp
 
-                blended    = video_frame.astype(np.float32) * (1.0 - last_alpha) + last_corrected * last_alpha
-                composited = np.clip(blended, 0, 255).astype(np.uint8)
+                np.multiply(video_frame, last_inv_alpha, out=blend_buf, casting='unsafe')
+                np.add(blend_buf, last_premult, out=blend_buf)
+                np.clip(blend_buf, 0, 255, out=blend_buf)
+                composited = blend_buf.astype(np.uint8)
                 result = cv2.addWeighted(video_frame, 1.0 - w, composited, w, 0) if w < 1.0 else composited
             else:
                 last_warped    = None
                 last_mask      = None
-                last_corrected = None
-                last_alpha     = None
+                last_premult   = None
+                last_inv_alpha = None
                 warp_counter   = 0
                 result = video_frame
         else:
@@ -345,6 +354,8 @@ if __name__ == "__main__":
     parser.add_argument("--output-port",  type=int, default=9002, dest="output_port",
                         help="Port on Pi receiving processed frames (default: 9002)")
     parser.add_argument("--landmark",     choices=["NORMAL", "REDUCED", "COARSE"], default="NORMAL")
+    parser.add_argument("--no-color-correct", action="store_false", dest="color_correct",
+                        help="Disable color correction (faster, try this to isolate cost)")
     args = parser.parse_args()
 
     if not os.path.exists(args.video_path):
@@ -371,4 +382,4 @@ if __name__ == "__main__":
         daemon=True,
     ).start()
 
-    _pipeline(args.video_path, npz_path, args.warp, args.width, args.height, args.skip_warp, args.landmark, args.feather_radius)
+    _pipeline(args.video_path, npz_path, args.warp, args.width, args.height, args.skip_warp, args.feather_radius, args.landmark, args.color_correct)
