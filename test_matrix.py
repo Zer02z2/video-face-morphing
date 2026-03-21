@@ -9,7 +9,7 @@ Usage:
 
 Options:
     --speed FLOAT   rotation speed multiplier (default: 1.0)
-    --size  FLOAT   square size as fraction of canvas diagonal (default: 1.0 = diagonal fills canvas)
+    --size  INT     canvas size in pixels to render at before sending to matrix (default: matrix width)
 """
 
 import argparse
@@ -23,8 +23,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--speed", type=float, default=1.0,
                         help="Rotation speed multiplier (default: 1.0)")
-    parser.add_argument("--size",  type=float, default=1.0,
-                        help="Square size as fraction of canvas (default: 1.0)")
+    parser.add_argument("--size",  type=int, default=None,
+                        help="Canvas size in pixels to render at (default: matrix width)")
     parser.add_argument("--led-rows",                 type=int,  default=64)
     parser.add_argument("--led-cols",                 type=int,  default=64)
     parser.add_argument("--led-chain",                type=int,  default=3,   dest="led_chain")
@@ -60,16 +60,16 @@ def main():
     w, h   = matrix.width, matrix.height
     canvas = matrix.CreateFrameCanvas()
 
-    cx, cy = w / 2, h / 2
-    # diagonal = min(w, h) so at size=1.0 the square's diagonal equals the smaller dimension
-    half   = (min(w, h) / math.sqrt(2) / 2) * args.size
+    size = args.size or w
+    cx, cy = size / 2, size / 2
+    half   = size / math.sqrt(2) / 2
     corners = [(-half, -half), (half, -half), (half, half), (-half, half)]
 
     angle              = 0.0
     degrees_per_second = 90.0 * args.speed
     t_last             = time.monotonic()
 
-    print(f"Matrix: {w}x{h} | speed: {args.speed} | size: {args.size} — Ctrl+C to stop")
+    print(f"Matrix: {w}x{h} | render size: {size}x{size} | speed: {args.speed} — Ctrl+C to stop")
 
     try:
         while True:
@@ -84,9 +84,11 @@ def main():
                 for x, y in corners
             ]
 
-            img  = Image.new("RGB", (w, h), (0, 0, 0))
+            img  = Image.new("RGB", (size, size), (0, 0, 0))
             draw = ImageDraw.Draw(img)
             draw.polygon(pts, fill=(0, 80, 180))
+            if size != w or size != h:
+                img = img.resize((w, h), Image.BILINEAR)
 
             canvas.SetImage(img)
             canvas = matrix.SwapOnVSync(canvas)
