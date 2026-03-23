@@ -17,6 +17,12 @@ import time
 from PIL import Image
 from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
+try:
+    from sdnotify import SystemdNotifier
+    _notifier = SystemdNotifier()
+except ImportError:
+    _notifier = None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,6 +121,8 @@ def main():
             canvas.SetImage(img)
             canvas = matrix.SwapOnVSync(canvas)
             canvas.SetImage(img)
+            if _notifier:
+                _notifier.notify("WATCHDOG=1")
     except KeyboardInterrupt:
         matrix.Clear()
         print("\nShutting down.")

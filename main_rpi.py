@@ -40,6 +40,12 @@ from core.warp_engine import get_triangle_indices, warp_face
 from core.compositor import _feather_mask, _match_color
 from core.face_model import get_landmark_indices
 
+try:
+    from sdnotify import SystemdNotifier
+    _notifier = SystemdNotifier()
+except ImportError:
+    _notifier = None
+
 
 # ---------------------------------------------------------------------------
 # Shared JPEG (render thread → TCP server)
@@ -299,6 +305,9 @@ def _pipeline(
                 _set_jpeg(jpeg.tobytes())
 
             frame_idx = (frame_idx + 1) % total_frames
+
+            if _notifier:
+                _notifier.notify("WATCHDOG=1")
 
             elapsed    = time.monotonic() - loop_start
             sleep_time = frame_duration - elapsed

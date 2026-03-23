@@ -1,0 +1,34 @@
+[Unit]
+Description=Face Morph Matrix Display
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Must run as root for GPIO/matrix access
+User=root
+WorkingDirectory=/home/zongze/Documents/video-face-morphing
+
+ExecStart=/usr/bin/python3 display/matrix_display.py \
+    --host rpi5.local \
+    --port 9002 \
+    --led-rows 64 \
+    --led-cols 64 \
+    --led-chain 3 \
+    --led-parallel 3 \
+    --led-brightness 80 \
+    --led-slowdown-gpio 3
+
+Restart=always
+RestartSec=5
+
+# Kill and restart if the display loop freezes for 30s
+WatchdogSec=30
+
+# View logs with: journalctl -u facemorph-display -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

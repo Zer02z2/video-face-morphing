@@ -8,18 +8,20 @@ Real-time face replacement pipeline: warps a live webcam face onto a looping vid
 
 ```
 .
-├── prebaker.py              # Offline: extract & save landmarks from a video
-├── main_rpi.py              # Pipeline for Pi 5 (or any Linux host) — standalone
-├── main_stream.py           # Pipeline for Mac — streams to/from a Pi 4
+├── prebaker.py                    # Offline: extract & save landmarks from a video
+├── main_rpi.py                    # Pipeline for Pi 5 (or any Linux host) — standalone
+├── main_stream.py                 # Pipeline for Mac — streams to/from a Pi 4
+├── facemorph-pipeline.service     # systemd service for Pi 5 pipeline
+├── facemorph-display.service      # systemd service for Pi 4 matrix display
 ├── core/
-│   ├── face_model.py        # MediaPipe model download + landmarker factory
-│   ├── webcam_detector.py   # Webcam capture + MediaPipe detection
-│   ├── warp_engine.py       # Delaunay triangulation + vectorized affine warp
-│   └── compositor.py        # Feathering, color correction, alpha blending
+│   ├── face_model.py              # MediaPipe model download + landmarker factory
+│   ├── webcam_detector.py         # Webcam capture + MediaPipe detection
+│   ├── warp_engine.py             # Delaunay triangulation + vectorized affine warp
+│   └── compositor.py              # Feathering, color correction, alpha blending
 └── display/
-    ├── browser_display.py   # MJPEG Flask server for browser preview
-    ├── matrix_display.py    # RGB LED matrix display (Pi 4, standalone)
-    └── pi_stream.py         # Pi 4 combined webcam server + matrix display
+    ├── browser_display.py         # MJPEG Flask server for browser preview
+    ├── matrix_display.py          # RGB LED matrix display (Pi 4, standalone)
+    └── pi_stream.py               # Pi 4 combined webcam server + matrix display
 ```
 
 ---
@@ -31,16 +33,19 @@ Use **Python 3.11** — it has the best compatibility with MediaPipe, OpenCV, an
 ### 1. Install pyenv
 
 **macOS:**
+
 ```bash
 brew install pyenv
 ```
 
 **Linux / Raspberry Pi OS:**
+
 ```bash
 curl https://pyenv.run | bash
 ```
 
 Add to your shell profile (`~/.zshrc`, `~/.bashrc`, or `~/.profile`):
+
 ```bash
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
@@ -48,6 +53,7 @@ eval "$(pyenv init -)"
 ```
 
 Reload your shell:
+
 ```bash
 exec "$SHELL"
 ```
@@ -55,11 +61,13 @@ exec "$SHELL"
 ### 2. Install build dependencies
 
 **macOS** (Homebrew):
+
 ```bash
 brew install openssl readline sqlite3 xz zlib
 ```
 
 **Raspberry Pi OS / Debian:**
+
 ```bash
 sudo apt update
 sudo apt install -y build-essential libssl-dev zlib1g-dev libbz2-dev \
@@ -81,11 +89,16 @@ pip install --upgrade pip
 ### 4. Install Python dependencies
 
 **Mac / Pi 5 (full pipeline):**
+
 ```bash
-pip install opencv-python mediapipe numpy numba flask Pillow
+pip install opencv-python mediapipe numpy numba flask Pillow sdnotify
 ```
 
 **Pi 4 display-only scripts** (`matrix_display.py`): these use the system Python that comes with the rgbmatrix library — see the RGB Matrix Setup section below.
+
+```bash
+sudo pip3 install Pillow sdnotify --break-system-packages
+```
 
 ---
 
@@ -104,11 +117,11 @@ python prebaker.py path/to/video.mp4 --landmark REDUCED   # 68-point subset
 python prebaker.py path/to/video.mp4 --landmark COARSE    # 20-point subset
 ```
 
-| Mode | Landmarks | Triangles | Speed |
-|------|-----------|-----------|-------|
-| NORMAL | 478 | ~900 | slowest |
-| REDUCED | 68 | ~130 | ~7x faster warp |
-| COARSE | 20 | ~30 | ~30x faster warp |
+| Mode    | Landmarks | Triangles | Speed            |
+| ------- | --------- | --------- | ---------------- |
+| NORMAL  | 478       | ~900      | slowest          |
+| REDUCED | 68        | ~130      | ~7x faster warp  |
+| COARSE  | 20        | ~30       | ~30x faster warp |
 
 The MediaPipe model (~6 MB) is downloaded automatically on first use.
 
@@ -125,11 +138,13 @@ There are three ways to run the pipeline depending on your hardware.
 Run on Mac. Preview output in a browser at `http://localhost:9003`.
 
 **Terminal 1 — pipeline:**
+
 ```bash
 python main_rpi.py path/to/video.mp4 --landmark COARSE
 ```
 
 **Terminal 2 — browser display:**
+
 ```bash
 python display/browser_display.py
 ```
@@ -137,6 +152,7 @@ python display/browser_display.py
 Open `http://localhost:9003` in a browser.
 
 **All flags for `main_rpi.py`:**
+
 ```
 --warp 0|1              0: full face swap (default)  1: expression transfer
 --width INT             processing width (default: video width)
@@ -156,13 +172,15 @@ Open `http://localhost:9003` in a browser.
 Pi 5 runs the full pipeline. Pi 4 connects to it and drives the LED matrix.
 
 **On Pi 5 — terminal 1:**
+
 ```bash
-python main_rpi.py path/to/video.mp4 --landmark COARSE --port 9002
+python main_rpi.py shrek-square.mp4 --landmark NORMAL --feather-radius 50 --port 9002
 ```
 
 **On Pi 4 — terminal 1:**
+
 ```bash
-sudo python3 display/matrix_display.py --host <pi5-ip> --port 9002
+sudo python3 display/matrix_display.py --host <pi5-ip> --port 9002 --led-brightness 80
 ```
 
 ---
@@ -172,16 +190,19 @@ sudo python3 display/matrix_display.py --host <pi5-ip> --port 9002
 Mac handles all computation. Pi 4 serves webcam frames to Mac and receives processed frames to display on the matrix.
 
 **Step 1 — On Pi 4, start the stream server first:**
+
 ```bash
 sudo python3 display/pi_stream.py
 ```
 
 **Step 2 — On Mac, connect and run the pipeline:**
+
 ```bash
 python main_stream.py path/to/video.mp4 --pi-host <pi4-ip> --landmark COARSE
 ```
 
 **All flags for `main_stream.py`:**
+
 ```
 --pi-host STR           IP of the Pi running pi_stream.py (required)
 --warp 0|1              0: full face swap (default)  1: expression transfer
@@ -221,35 +242,32 @@ sudo make install-python PYTHON=$(which python3)
 
 ### 3. Isolate core 3 for the matrix refresh thread
 
-The matrix library pins its refresh thread to a dedicated CPU core. To prevent the OS from scheduling work there, add `isolcpus=3` to the kernel boot parameters:
+**Pi 4 only — not needed on Pi 5.** The matrix library pins its refresh thread to a dedicated CPU core. To prevent the OS from scheduling work there, add `isolcpus=3` to the kernel boot parameters:
 
 ```bash
 sudo nano /boot/firmware/cmdline.txt
 ```
 
 Append `isolcpus=3` to the end of the existing line (do not add a new line):
+
 ```
 ... rootwait isolcpus=3
 ```
 
 Reboot:
+
 ```bash
 sudo reboot
 ```
 
-### 4. Install Pillow for system Python
-
-```bash
-sudo pip3 install Pillow --break-system-packages
-```
-
-### 5. Run the display script
+### 4. Run the display script
 
 ```bash
 sudo python3 display/matrix_display.py --host <compute-host-ip> --port 9002
 ```
 
 Or with custom matrix hardware settings:
+
 ```bash
 sudo python3 display/matrix_display.py \
   --host <compute-host-ip> \
@@ -262,6 +280,7 @@ sudo python3 display/matrix_display.py \
 ```
 
 **All `--led-*` flags:**
+
 ```
 --led-rows INT                  panel height in pixels (default: 64)
 --led-cols INT                  panel width in pixels (default: 64)
@@ -288,6 +307,7 @@ sudo python3 display/pi_stream.py
 ```
 
 With options:
+
 ```bash
 sudo python3 display/pi_stream.py \
   --webcam-port 9001 \
@@ -316,12 +336,55 @@ Open `http://localhost:9003` in a browser.
 
 ---
 
+## Running as a Service (Auto-start on Boot)
+
+Both Pis can run their scripts as systemd services that start automatically on boot and restart on crash or freeze.
+
+### Pi 5 — pipeline service
+
+```bash
+sudo cp facemorph-pipeline.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable facemorph-pipeline
+sudo systemctl start facemorph-pipeline
+```
+
+### Pi 4 — display service
+
+```bash
+sudo cp facemorph-display.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable facemorph-display
+sudo systemctl start facemorph-display
+```
+
+### Useful commands
+
+```bash
+# View live logs
+journalctl -u facemorph-pipeline -f
+journalctl -u facemorph-display -f
+
+# Stop / restart
+sudo systemctl stop facemorph-pipeline
+sudo systemctl restart facemorph-pipeline
+
+# Disable auto-start
+sudo systemctl disable facemorph-pipeline
+```
+
+### Watchdog
+
+Both service files have `WatchdogSec=30` — if the main loop freezes for 30 seconds without sending a watchdog ping, systemd will kill and restart the process automatically. This requires `sdnotify` to be installed (see Python dependencies above).
+
+---
+
 ## Warp Modes
 
-| Mode | Flag | Description |
-|------|------|-------------|
-| Full face swap | `--warp 0` (default) | Warps your entire face into the shape of the video character's face |
-| Expression transfer | `--warp 1` | Extracts your facial expression delta and applies it to the character's neutral pose |
+| Mode                | Flag                 | Description                                                                          |
+| ------------------- | -------------------- | ------------------------------------------------------------------------------------ |
+| Full face swap      | `--warp 0` (default) | Warps your entire face into the shape of the video character's face                  |
+| Expression transfer | `--warp 1`           | Extracts your facial expression delta and applies it to the character's neutral pose |
 
 Expression transfer requires the `.npz` to contain a neutral pose (prebaker computes this automatically from the first 30 detected frames).
 
