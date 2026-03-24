@@ -18,7 +18,8 @@ ExecStart=/usr/bin/python3 display/matrix_display.py \
     --led-chain 3 \
     --led-parallel 3 \
     --led-brightness 80 \
-    --led-slowdown-gpio 3
+    --led-slowdown-gpio 3 \
+    --led-limit-refresh 300
 
 Restart=always
 RestartSec=5

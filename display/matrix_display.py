@@ -79,6 +79,7 @@ def parse_args():
     parser.add_argument("--led-pwm-lsb-nanoseconds",  type=int,  default=50,   dest="led_pwm_lsb_nanoseconds")
     parser.add_argument("--led-slowdown-gpio",        type=int,  default=3,    dest="led_slowdown_gpio")
     parser.add_argument("--led-brightness",           type=int,  default=100,  dest="led_brightness")
+    parser.add_argument("--led-limit-refresh",        type=int,  default=300,  dest="led_limit_refresh")
     parser.add_argument("--led-hardware-mapping",     default="regular",       dest="led_hardware_mapping")
     parser.add_argument("--led-pixel-mapper",         default="",              dest="led_pixel_mapper")
     parser.add_argument("--led-show-refresh",         action="store_true", default=False, dest="led_show_refresh")
@@ -106,6 +107,7 @@ def main():
     options.hardware_mapping    = args.led_hardware_mapping
     options.pixel_mapper_config = args.led_pixel_mapper
     options.show_refresh_rate   = args.led_show_refresh
+    options.limit_refresh_rate   = args.led_limit_refresh
     options.drop_privileges     = False
 
     matrix   = RGBMatrix(options=options)
