@@ -107,7 +107,7 @@ def main():
     options.hardware_mapping    = args.led_hardware_mapping
     options.pixel_mapper_config = args.led_pixel_mapper
     options.show_refresh_rate   = args.led_show_refresh
-    options.limit_refresh_rate   = args.led_limit_refresh
+    options.limit_refresh_rate_hz   = args.led_limit_refresh
     options.drop_privileges     = False
 
     matrix   = RGBMatrix(options=options)
