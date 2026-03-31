@@ -11,7 +11,7 @@ User=root
 WorkingDirectory=/home/zongze/Documents/video-face-morphing
 
 ExecStart=/usr/bin/python3 display/matrix_display.py \
-    --host rpi5.local \
+    --host rpi5 \
     --port 9002 \
     --led-rows 64 \
     --led-cols 64 \
